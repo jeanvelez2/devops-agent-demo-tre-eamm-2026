@@ -1,0 +1,32 @@
+name: capacity-check
+description: Checks DynamoDB capacity utilization and alerts if approaching limits
+trigger:
+  type: schedule
+  cron: "0 */6 * * *"  # Every 6 hours
+workflow:
+  steps:
+    - name: check-dynamodb-capacity
+      action: cloudwatch-query
+      parameters:
+        namespace: AWS/DynamoDB
+        metricName: ConsumedWriteCapacityUnits
+        dimensions:
+          TableName: summit-store-inventory
+          GlobalSecondaryIndexName: status-index
+        stat: Average
+        period: 3600
+    - name: evaluate-threshold
+      action: evaluate
+      condition: "steps.check-dynamodb-capacity.value > 4"  # 80% of 5 WCU
+      on_true: notify
+      on_false: complete
+    - name: notify
+      action: slack-post
+      parameters:
+        channel: "#summit-store-incidents"
+        message: |
+          :warning: DynamoDB GSI capacity approaching limit
+          Table: summit-store-inventory
+          Index: status-index
+          Current usage: {{ steps.check-dynamodb-capacity.value }} / 5 WCU ({{ (steps.check-dynamodb-capacity.value / 5 * 100) | round }}%)
+          Recommendation: Enable auto-scaling or increase provisioned capacity

@@ -1,0 +1,29 @@
+# CDK
+infrastructure/cdk.out/
+
+# Node
+node_modules/
+*.log
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Test output
+coverage/
+.nyc_output/
