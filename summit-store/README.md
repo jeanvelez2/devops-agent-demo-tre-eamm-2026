@@ -96,6 +96,25 @@ Client → CloudFront (WAF) → ALB (internal) → order-service
 - Keep load test running throughout the presentation for real-time metrics
 - Prevention recommendations should be pre-generated from a previous investigation cycle
 
+### Load Testing (Fargate)
+
+The load test runs as a Fargate task (no laptop dependency):
+
+```bash
+# Build and push the k6 container
+cd loadtest
+docker build --platform linux/amd64 -t summit-store-loadtest .
+docker tag summit-store-loadtest:latest <ACCOUNT>.dkr.ecr.us-east-1.amazonaws.com/summit-store-loadtest:latest
+docker push <ACCOUNT>.dkr.ecr.us-east-1.amazonaws.com/summit-store-loadtest:latest
+
+# Run 24h load test on Fargate
+aws ecs run-task --cluster summit-store --task-definition summit-store-loadtest:1 \
+  --launch-type FARGATE \
+  --network-configuration 'awsvpcConfiguration={subnets=["<SUBNET>"],assignPublicIp=ENABLED}'
+
+# Monitor via CloudWatch Logs: /ecs/summit-store/loadtest
+```
+
 ## Project Structure
 
 ```
@@ -106,7 +125,7 @@ summit-store/
 │   ├── payment-service/    Python 3.12 / Flask
 │   └── inventory-service/  Python 3.12 / Flask
 ├── .github/workflows/      CI/CD (GitHub Actions)
-├── loadtest/               k6 scripts
+├── loadtest/               k6 scripts + Dockerfile (Fargate load testing)
 ├── scripts/                Utility scripts
 ├── .devopsagent/           DevOps Agent configuration
 │   ├── skills/             Custom Skills
