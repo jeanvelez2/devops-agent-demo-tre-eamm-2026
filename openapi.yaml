@@ -1,0 +1,473 @@
+openapi: 3.0.3
+info:
+  title: Summit Store API
+  description: |
+    Microservices-based e-commerce application deployed on AWS ECS Fargate.
+    Comprises three services: order-service, payment-service, and inventory-service.
+  version: 1.0.0
+  contact:
+    name: Summit Store Team
+
+servers:
+  - url: https://d3utc49jmq01bw.cloudfront.net
+    description: Production (CloudFront HTTPS endpoint)
+  - url: http://Summit-ALBAE-riHCsL2wW7au-1698008578.us-east-1.elb.amazonaws.com
+    description: Direct ALB (HTTP only)
+
+tags:
+  - name: order-service
+    description: Handles order creation, payment orchestration, and inventory queuing
+  - name: payment-service
+    description: Processes payments via external gateway
+  - name: inventory-service
+    description: Manages stock levels and reservations
+  - name: chaos
+    description: Chaos engineering endpoints for fault injection
+
+paths:
+  # ─── Order Service ───────────────────────────────────────────────────────────
+
+  /health:
+    get:
+      tags: [order-service]
+      summary: Order service health check
+      operationId: getOrderHealth
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: ok
+                service: order-service
+
+  /orders:
+    post:
+      tags: [order-service]
+      summary: Create a new order
+      description: |
+        Creates an order, calls payment-service for payment processing,
+        then queues an inventory update message to SQS.
+        
+        Supports optional discount codes (available on demo/add-discount branch):
+        - `SUMMIT20`: 20% discount
+        - `HALF`: 50% discount
+      operationId: createOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+      responses:
+        '200':
+          description: Order completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+              example:
+                orderId: "550e8400-e29b-41d4-a716-446655440000"
+                status: completed
+        '500':
+          description: Payment failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderErrorResponse'
+              example:
+                orderId: "550e8400-e29b-41d4-a716-446655440000"
+                status: failed
+                error: "Payment failed: 504"
+
+  /chaos:
+    post:
+      tags: [chaos]
+      summary: Enable chaos delay on order-service
+      description: Injects an artificial delay into order processing for testing resilience.
+      operationId: enableChaos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChaosEnableRequest'
+      responses:
+        '200':
+          description: Chaos mode enabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChaosEnableResponse'
+              example:
+                status: chaos enabled
+                delayMs: 2000
+    delete:
+      tags: [chaos]
+      summary: Disable chaos delay on order-service
+      operationId: disableChaos
+      responses:
+        '200':
+          description: Chaos mode disabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChaosDisableResponse'
+              example:
+                status: chaos disabled
+
+  # ─── Payment Service ─────────────────────────────────────────────────────────
+
+  /pay:
+    post:
+      tags: [payment-service]
+      summary: Process a payment
+      description: |
+        Calls an external payment gateway to process the payment.
+        Gateway URL and timeout are configured via environment variables.
+        Note: No circuit breaker is currently implemented (intentional weakness).
+      operationId: processPayment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRequest'
+      responses:
+        '200':
+          description: Payment processed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentSuccessResponse'
+              example:
+                success: true
+                transactionId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        '502':
+          description: Gateway error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentErrorResponse'
+              example:
+                success: false
+                error: "Connection refused"
+        '504':
+          description: Gateway timeout
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentErrorResponse'
+              example:
+                success: false
+                error: gateway_timeout
+
+  # ─── Inventory Service ───────────────────────────────────────────────────────
+
+  /stock/{itemId}:
+    get:
+      tags: [inventory-service]
+      summary: Get stock level for an item
+      operationId: getStock
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique item identifier
+      responses:
+        '200':
+          description: Stock information retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockItem'
+              example:
+                itemId: "ITEM-001"
+                quantity: 42
+                status: available
+        '404':
+          description: Item not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: not found
+
+  /stock/status/{status}:
+    get:
+      tags: [inventory-service]
+      summary: Query stock by status
+      description: Queries the status-index GSI. This endpoint may experience DynamoDB throttling under heavy load.
+      operationId: getStockByStatus
+      parameters:
+        - name: status
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [available, reserved, out_of_stock]
+          description: Stock status to filter by
+      responses:
+        '200':
+          description: List of items matching the status
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StockItem'
+              example:
+                - itemId: "ITEM-001"
+                  quantity: 42
+                  status: available
+                - itemId: "ITEM-002"
+                  quantity: 15
+                  status: available
+
+  /reserve:
+    post:
+      tags: [inventory-service]
+      summary: Reserve stock for an order
+      description: Atomically decrements stock using a DynamoDB conditional update to prevent overselling.
+      operationId: reserveStock
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReserveRequest'
+      responses:
+        '200':
+          description: Stock reserved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReserveSuccessResponse'
+              example:
+                reserved: true
+                remaining: 37
+        '404':
+          description: Item not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReserveErrorResponse'
+              example:
+                reserved: false
+                error: item not found
+        '409':
+          description: Insufficient stock
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReserveErrorResponse'
+              example:
+                reserved: false
+                error: insufficient stock
+                remaining: 3
+
+components:
+  schemas:
+    # ─── Common ──────────────────────────────────────────────────────────────────
+
+    HealthResponse:
+      type: object
+      required: [status, service]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        service:
+          type: string
+          enum: [order-service, payment-service, inventory-service]
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+
+    # ─── Order Service Schemas ───────────────────────────────────────────────────
+
+    CreateOrderRequest:
+      type: object
+      required: [itemId, quantity, paymentMethod]
+      properties:
+        itemId:
+          type: string
+          description: Item to order
+          example: "ITEM-001"
+        quantity:
+          type: integer
+          minimum: 1
+          description: Number of units to order
+          example: 2
+        paymentMethod:
+          type: string
+          description: Payment method identifier
+          example: "credit_card"
+        discountCode:
+          type: string
+          description: Optional discount code (SUMMIT20 for 20% off, HALF for 50% off)
+          example: "SUMMIT20"
+
+    OrderResponse:
+      type: object
+      required: [orderId, status]
+      properties:
+        orderId:
+          type: string
+          format: uuid
+          description: Unique order identifier
+        status:
+          type: string
+          enum: [completed]
+
+    OrderErrorResponse:
+      type: object
+      required: [orderId, status, error]
+      properties:
+        orderId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [failed]
+        error:
+          type: string
+          description: Error message from payment processing
+
+    ChaosEnableRequest:
+      type: object
+      properties:
+        delayMs:
+          type: integer
+          minimum: 0
+          default: 2000
+          description: Artificial delay in milliseconds to inject into order processing
+
+    ChaosEnableResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: ["chaos enabled"]
+        delayMs:
+          type: integer
+
+    ChaosDisableResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: ["chaos disabled"]
+
+    # ─── Payment Service Schemas ─────────────────────────────────────────────────
+
+    PaymentRequest:
+      type: object
+      required: [orderId, amount]
+      properties:
+        orderId:
+          type: string
+          description: Associated order ID
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        amount:
+          type: number
+          minimum: 0
+          description: Payment amount in base currency units
+          example: 20
+        method:
+          type: string
+          description: Payment method
+          example: "credit_card"
+
+    PaymentSuccessResponse:
+      type: object
+      required: [success, transactionId]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        transactionId:
+          type: string
+          format: uuid
+          description: Unique transaction identifier from gateway
+
+    PaymentErrorResponse:
+      type: object
+      required: [success, error]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        error:
+          type: string
+          description: Error description
+
+    # ─── Inventory Service Schemas ───────────────────────────────────────────────
+
+    StockItem:
+      type: object
+      required: [itemId, quantity, status]
+      properties:
+        itemId:
+          type: string
+          description: Unique item identifier
+        quantity:
+          type: integer
+          minimum: 0
+          description: Current stock level
+        status:
+          type: string
+          enum: [available, reserved, out_of_stock]
+          description: Current stock status
+
+    ReserveRequest:
+      type: object
+      required: [itemId]
+      properties:
+        itemId:
+          type: string
+          description: Item to reserve
+          example: "ITEM-001"
+        quantity:
+          type: integer
+          minimum: 1
+          default: 1
+          description: Number of units to reserve
+          example: 2
+        traceId:
+          type: string
+          description: Optional trace ID for distributed tracing
+          example: "550e8400-e29b-41d4-a716-446655440000"
+
+    ReserveSuccessResponse:
+      type: object
+      required: [reserved, remaining]
+      properties:
+        reserved:
+          type: boolean
+          enum: [true]
+        remaining:
+          type: integer
+          minimum: 0
+          description: Remaining stock after reservation
+
+    ReserveErrorResponse:
+      type: object
+      required: [reserved, error]
+      properties:
+        reserved:
+          type: boolean
+          enum: [false]
+        error:
+          type: string
+        remaining:
+          type: integer
+          description: Current stock level (present on insufficient stock errors)

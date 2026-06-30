@@ -4,6 +4,7 @@ import { NetworkStack } from '../lib/network-stack';
 import { DatabaseStack } from '../lib/database-stack';
 import { ServicesStack } from '../lib/services-stack';
 import { MonitoringStack } from '../lib/monitoring-stack';
+import { CdnStack } from '../lib/cdn-stack';
 
 const app = new cdk.App();
 
@@ -22,4 +23,8 @@ new MonitoringStack(app, 'SummitStoreMonitoring', {
   env,
   alb: services.alb,
   tableName: database.table.tableName,
+});
+new CdnStack(app, 'SummitStoreCdn', {
+  env,
+  alb: services.alb,
 });
