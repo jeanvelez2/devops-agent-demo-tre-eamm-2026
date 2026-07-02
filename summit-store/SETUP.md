@@ -317,12 +317,28 @@ sleep 480
 curl -X DELETE https://<CLOUDFRONT_URL>/chaos
 ```
 
-### 6.3 Prepare Demo Branches
+### 6.3 Demo Branches (pre-created)
 
-Branches already exist:
-- `demo/bad-release` — PR #1 (removes error handling + unencrypted S3 bucket)
-- `demo/bad-change` — alternative bad PR
-- `demo/add-discount` — feature PR for release testing demo
+All branches exist and are pushed to GitHub:
+
+| Branch | Demo | What it shows |
+|--------|------|---------------|
+| `demo/bad-release` | Release Readiness (Demo 6) | PR removes error handling + adds unencrypted S3 — should be BLOCKED |
+| `demo/bad-change` | Release Readiness (alternative) | Similar bad changes for a backup PR |
+| `demo/add-discount` | Release Testing (Demo 7) | Clean feature PR for autonomous test generation |
+| `demo/break-payment-timeout` | Incident Trigger (Demo 2) | GATEWAY_TIMEOUT_MS=100 — causes cascade failure |
+| `demo/fix-circuit-breaker` | Prevention Fix (Demo 4→8) | Implements pybreaker — shows recommendation → implementation |
+| `demo/missing-dlq-alarm` | Observability Fix (Demo 4) | Adds DLQ alarm — shows gap being closed |
+| `demo/canary-deployment` | Pipeline Fix (Demo 4) | Adds canary stage with auto-rollback |
+| `demo/scope-iam` | Security Fix (Demo 6) | Scopes IAM to least privilege |
+
+**To create PRs for any branch:**
+```bash
+# Example: create PR for the circuit breaker fix
+git checkout demo/fix-circuit-breaker
+# Push is already done — create PR via GitHub UI or:
+# gh pr create --base main --title "feat: add circuit breaker to payment-service"
+```
 
 ---
 

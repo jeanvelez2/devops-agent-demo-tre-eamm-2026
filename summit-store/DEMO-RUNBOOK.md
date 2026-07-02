@@ -107,12 +107,21 @@ Have these ready:
 
 **What you do:**
 
-**Step 1 — Trigger (in terminal):**
+**Option A — Chaos endpoint (fast, for live demo):**
 ```bash
 curl -X POST https://$CLOUDFRONT_URL/chaos \
   -H "Content-Type: application/json" \
   -d '{"delayMs": 3000}'
 ```
+
+**Option B — Deploy the bad timeout change (more realistic):**
+```bash
+# This simulates what actually happened — a developer pushed a bad config
+git checkout demo/break-payment-timeout
+# Show the diff: GATEWAY_TIMEOUT_MS changed from 5000 to 100
+git diff main -- summit-store/services/payment-service/app.py
+```
+Then deploy it via ECS force-new-deployment or merge to main.
 
 **Step 2 — Wait 2-3 minutes** for p99 latency to exceed 500ms threshold.
 
@@ -167,6 +176,15 @@ curl -X POST https://$CLOUDFRONT_URL/chaos \
 - "These aren't from a static rules engine — they came from analyzing actual incidents"
 - "It recommends a circuit breaker specifically for payment-service because it investigated the cascade failure and identified the gap"
 - "Each recommendation includes implementation specs I can hand to my coding agent"
+
+**Demo branches that implement these fixes (show in Kiro or GitHub):**
+
+| Recommendation | Branch | Key change |
+|---------------|--------|------------|
+| Circuit breaker | `demo/fix-circuit-breaker` | `pybreaker` added to payment-service |
+| DLQ alarm | `demo/missing-dlq-alarm` | CloudWatch alarm on DLQ depth > 0 |
+| Canary deployment | `demo/canary-deployment` | GitHub Actions canary stage with auto-rollback |
+| Scope IAM | `demo/scope-iam` | `s3:*` → `s3:PutObject` on specific bucket |
 
 ---
 
@@ -252,20 +270,27 @@ Run release testing on my summit-store-api test profile. Verify the order creati
 **What you do:**
 Switch to Kiro IDE.
 
-**Prompt 1:**
+**Prompt 1 — Investigate:**
 ```
 What caused the last incident on payment-service?
 ```
 
-**Prompt 2:**
+**Prompt 2 — Implement prevention fix:**
 ```
-What are the known architectural weaknesses in summit-store and what should I fix first?
+Show me the circuit breaker recommendation for payment-service. Implement it using pybreaker.
+```
+
+Then show the `demo/fix-circuit-breaker` branch diff — "Here's what the implementation looks like."
+
+**Prompt 3 — Validate the fix:**
+```
+Run a release readiness review on the demo/fix-circuit-breaker branch.
 ```
 
 **What you say:**
 - "Same DevOps Agent, accessed from my IDE — no context switching"
-- "I can investigate incidents, query architecture, and run release reviews without leaving my editor"
-- "Development and operations in one workflow"
+- "The agent investigated the incident, recommended the circuit breaker, I implemented it, and now I'm validating it — all in one workflow"
+- "Incident → Prevention → Implementation → Validation — that's the full DevOps loop"
 
 ---
 

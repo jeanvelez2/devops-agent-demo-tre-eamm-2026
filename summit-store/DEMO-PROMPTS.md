@@ -213,6 +213,58 @@ Use the summit-store-ops MCP tools to get the full deployment diff for deploy-20
 
 ---
 
+## BONUS: Prevention → Implementation → Validation Flow
+
+Use these prompts to show the complete DevOps loop in Kiro:
+
+### Step 1 — Show the problem (incident root cause)
+```
+What caused the last incident on payment-service? What was the root cause?
+```
+
+### Step 2 — Show the recommendation
+```
+What prevention recommendations exist for payment-service resilience?
+```
+
+### Step 3 — Implement the fix (show branch diff)
+```bash
+# In terminal, show the circuit breaker implementation:
+git diff main..demo/fix-circuit-breaker -- summit-store/services/payment-service/
+```
+
+### Step 4 — Validate the fix (release readiness)
+```
+Run a release readiness review on the demo/fix-circuit-breaker branch.
+```
+
+### Alternative fixes to show:
+```bash
+# DLQ alarm fix:
+git diff main..demo/missing-dlq-alarm -- summit-store/infrastructure/lib/monitoring-stack.ts
+
+# Canary deployment fix:
+git diff main..demo/canary-deployment -- summit-store/.github/workflows/payment-service.yml
+
+# IAM scope fix:
+git diff main..demo/scope-iam -- summit-store/infrastructure/lib/services-stack.ts
+```
+
+---
+
+## Demo Branches Quick Reference
+
+| Branch | Demo | PR Title |
+|--------|------|----------|
+| `demo/bad-release` | Demo 6 (RRR BLOCK) | feat: add order receipts bucket and simplify payment flow |
+| `demo/break-payment-timeout` | Demo 2 (Incident) | chore: reduce gateway timeout for performance testing |
+| `demo/fix-circuit-breaker` | Demo 4→8 (Fix) | feat: add circuit breaker to payment-service gateway calls |
+| `demo/missing-dlq-alarm` | Demo 4 (Obs fix) | feat: add CloudWatch alarm on SQS dead-letter queue depth |
+| `demo/canary-deployment` | Demo 4 (Pipeline) | feat: add canary deployment stage with automated rollback |
+| `demo/scope-iam` | Demo 6 (Security) | fix: scope order-service IAM to least privilege |
+
+---
+
 ## Incident Recovery (after demos)
 
 ```bash

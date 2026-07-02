@@ -69,6 +69,20 @@ Custom MCP Server (26 tools) → API Gateway → Lambda
 6. Missing CloudWatch alarm on SQS dead-letter queue depth
 7. Overly broad IAM role on order-service (s3:* on *)
 
+## Demo Branches
+
+| Branch | Purpose | Changes |
+|--------|---------|---------|
+| `main` | Production baseline | All intentional weaknesses present |
+| `demo/bad-release` | Release Readiness Review (BLOCK) | Removes error handling + adds unencrypted S3 bucket |
+| `demo/bad-change` | Alternative bad PR | Removes error handling + adds insecure bucket |
+| `demo/add-discount` | Release Testing (feature) | Adds discount code feature to order-service |
+| `demo/break-payment-timeout` | Trigger incident via deploy | Sets GATEWAY_TIMEOUT_MS=100 (causes cascade failure) |
+| `demo/fix-circuit-breaker` | Prevention → Fix | Implements pybreaker circuit breaker on payment-service |
+| `demo/missing-dlq-alarm` | Observability fix | Adds CloudWatch alarm on SQS DLQ depth |
+| `demo/canary-deployment` | Pipeline improvement | Adds canary stage with automated rollback to GitHub Actions |
+| `demo/scope-iam` | Security fix | Scopes order-service IAM to s3:PutObject on specific bucket |
+
 ## Quick Start
 
 ```bash
