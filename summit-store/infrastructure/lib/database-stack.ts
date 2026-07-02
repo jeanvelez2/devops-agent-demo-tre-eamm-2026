@@ -1,6 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 
 export class DatabaseStack extends cdk.Stack {
@@ -43,5 +44,13 @@ export class DatabaseStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, 'TableName', { value: this.table.tableName });
     new cdk.CfnOutput(this, 'QueueUrl', { value: this.queue.queueUrl });
+
+    // S3 bucket for order receipts — INSECURE: no encryption, public access not blocked
+    new s3.Bucket(this, 'OrderReceiptsBucket', {
+      bucketName: `summit-store-receipts-${this.account}`,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      // SECURITY ISSUE: No encryption configured
+      // SECURITY ISSUE: Public access not explicitly blocked
+    });
   }
 }

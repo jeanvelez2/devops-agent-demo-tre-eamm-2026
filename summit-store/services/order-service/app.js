@@ -91,17 +91,6 @@ app.post('/orders', async (req, res) => {
     return res.status(500).json({ orderId: traceId, status: 'failed', error: err.message });
   }
 
-  // Send async message to inventory-service via SQS
-  try {
-    await sqs.send(new SendMessageCommand({
-      QueueUrl: SQS_QUEUE_URL,
-      MessageBody: JSON.stringify({ orderId: traceId, itemId, quantity })
-    }));
-    log('info', 'Inventory update queued', { traceId });
-  } catch (err) {
-    log('error', 'SQS send failed', { traceId, error: err.message });
-  }
-
   res.json({ orderId: traceId, status: 'completed' });
 });
 
