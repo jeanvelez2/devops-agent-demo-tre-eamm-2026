@@ -5,6 +5,8 @@ import { DatabaseStack } from '../lib/database-stack';
 import { ServicesStack } from '../lib/services-stack';
 import { MonitoringStack } from '../lib/monitoring-stack';
 import { CdnStack } from '../lib/cdn-stack';
+import { DevOpsAgentTriggerStack } from '../lib/devops-agent-trigger-stack';
+import { McpServerStack } from '../lib/mcp-server-stack';
 
 const app = new cdk.App();
 
@@ -28,3 +30,10 @@ new CdnStack(app, 'SummitStoreCdn', {
   env,
   alb: services.alb,
 });
+
+new DevOpsAgentTriggerStack(app, 'SummitStoreDevOpsAgentTrigger', {
+  env,
+  alarmTopicArn: 'arn:aws:sns:us-east-1:223057881262:summit-store-alarms',
+});
+
+new McpServerStack(app, 'SummitStoreMcpServer', { env });

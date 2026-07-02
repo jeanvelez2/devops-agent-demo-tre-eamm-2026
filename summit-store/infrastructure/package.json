@@ -1,16 +1,19 @@
 {
   "name": "summit-store-infrastructure",
   "version": "1.0.0",
-  "bin": { "app": "bin/app.ts" },
+  "bin": {
+    "app": "bin/app.ts"
+  },
   "scripts": {
     "build": "tsc",
     "cdk": "cdk",
     "deploy": "cdk deploy --all --require-approval never"
   },
   "devDependencies": {
+    "@types/node": "^26.1.0",
     "aws-cdk": "2.1128.1",
-    "typescript": "5.8.3",
-    "ts-node": "10.9.2"
+    "ts-node": "10.9.2",
+    "typescript": "5.8.3"
   },
   "dependencies": {
     "aws-cdk-lib": "2.260.0",

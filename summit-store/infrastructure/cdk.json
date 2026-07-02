@@ -1,6 +1,7 @@
 {
   "app": "npx ts-node bin/app.ts",
   "context": {
-    "allowedIp": "0.0.0.0/0"
+    "allowedIp": "0.0.0.0/0",
+    "@aws-cdk/core:defaultCrossStackReferences": "strong"
   }
 }

@@ -1,136 +1,109 @@
 # summit-store
 
-Microservices demo application for showcasing AWS DevOps Agent capabilities at the EAMM TFC Summit.
+Microservices demo application for showcasing AWS DevOps Agent capabilities at the EAMM TFC Summit 2026.
 
 ## Architecture
 
 ```
-Client → CloudFront (WAF) → ALB (internal) → order-service
-                                                  ├── payment-service → External Gateway
-                                                  └── SQS → inventory-service → DynamoDB
+Client → CloudFront (WAF) → ALB → order-service (Node.js)
+                                      ├── payment-service (Python) → External Gateway
+                                      └── SQS → inventory-service (Python) → DynamoDB
+
+CloudWatch Alarms → SNS → Lambda → DevOps Agent Webhook
+                 → EventBridge ────→ (same Lambda)
+
+Custom MCP Server (26 tools) → API Gateway → Lambda
 ```
 
-3 microservices on ECS Fargate:
-- **order-service** (Node.js 22) — accepts orders, orchestrates payment + inventory
-- **payment-service** (Python 3.12) — processes payments via external gateway
-- **inventory-service** (Python 3.12) — manages stock levels in DynamoDB
+## Services
+
+| Service | Runtime | Purpose |
+|---------|---------|---------|
+| order-service | Node.js 22 / Express | Accepts orders, orchestrates payment + inventory |
+| payment-service | Python 3.12 / Flask | Processes payments via external gateway |
+| inventory-service | Python 3.12 / Flask | Manages stock levels in DynamoDB |
+
+## Infrastructure Stacks (CDK)
+
+| Stack | Resources |
+|-------|-----------|
+| SummitStoreNetwork | VPC, public subnets |
+| SummitStoreDatabase | DynamoDB, SQS, DLQ |
+| SummitStoreServices | ECS Fargate cluster, ALB, 3 services, Lambda notification |
+| SummitStoreMonitoring | CloudWatch alarms, SNS topic |
+| SummitStoreCdn | CloudFront distribution + WAF |
+| SummitStoreDevOpsAgentTrigger | Lambda webhook trigger, SNS subscription, EventBridge rule, Secrets Manager |
+| SummitStoreMcpServer | API Gateway + Lambda hosting custom MCP server (26 tools) |
+
+## DevOps Agent Integration
+
+| Integration | Status |
+|-------------|--------|
+| AWS CloudWatch (native) | Connected |
+| GitHub (<GITHUB_OWNER>/<REPO_NAME>) | Connected (READ_WRITE) |
+| Slack (#summit-store-incidents) | Connected |
+| Webhook (HMAC) | Configured — alarms auto-trigger investigations |
+| Custom MCP Server (summit-store-ops, 26 tools) | Connected via SigV4 |
+| Architecture Skill | Uploaded (Generic) |
+| Circuit Breaker Skill | Uploaded (Incident Mitigation) |
+| Skip Scheduled Maintenance Skill | Uploaded (Incident Triage) |
+| Custom Agents (3) | Running on 6-hour schedules |
+| Release Readiness Review | Enabled |
+| Release Testing (API) | Test profile configured |
+
+## Endpoints
+
+| Endpoint | URL | How to find |
+|----------|-----|-------------|
+| CloudFront (HTTPS) | `<CLOUDFRONT_URL>` | CDK output `SummitStoreCdn.CloudFrontUrl` |
+| ALB (HTTP) | `<ALB_URL>` | CDK output `SummitStoreServices.AlbUrl` |
+| MCP Server | `<MCP_ENDPOINT>` | CDK output `SummitStoreMcpServer.McpEndpointUrl` |
+
+## Intentional Weaknesses (for DevOps Agent to discover)
+
+1. No circuit breaker on payment-service external gateway calls
+2. No retry logic on order-service → payment-service calls
+3. Under-provisioned DynamoDB GSI (status-index at 5 RCU/WCU)
+4. Lambda notification timeout too short (3s for SES calls)
+5. No canary deployments in CI/CD pipeline
+6. Missing CloudWatch alarm on SQS dead-letter queue depth
+7. Overly broad IAM role on order-service (s3:* on *)
 
 ## Quick Start
 
 ```bash
-# Deploy infrastructure
-./scripts/deploy.sh
+# Deploy all infrastructure
+cd infrastructure && npx cdk deploy --all --profile $AWS_PROFILE
 
 # Generate load
-./scripts/generate-load.sh <CLOUDFRONT_URL> <INVENTORY_SERVICE_URL>
+./scripts/generate-load.sh
 
-# Trigger incident
-./scripts/trigger-incident.sh <CLOUDFRONT_URL>
-```
-
-## Intentional Weaknesses (for DevOps Agent to discover)
-
-1. **No circuit breaker** — payment-service has no protection against gateway failures
-2. **No retry logic** — order-service single failure = order failure
-3. **Under-provisioned GSI** — DynamoDB status-index at 5 RCU/WCU throttles under load
-4. **Lambda timeout** — 3s too short for SES calls
-5. **No canary deployments** — CI/CD uses rolling updates only
-6. **Missing DLQ alarm** — no CloudWatch alarm on SQS dead-letter queue depth
-7. **Overly broad IAM** — order-service role has s3:* on *
-
-## Demo Preparation
-
-### Prerequisites
-- AWS account with CDK bootstrap completed in us-east-1
-- k6 installed for load testing
-- Docker installed for building container images
-
-### Pre-Demo Steps
-
-1. **Deploy**: `./scripts/deploy.sh`
-2. **Run load test for 24+ hours** to build baseline topology in DevOps Agent
-3. **Complete one full investigation cycle** (trigger incident → let DevOps Agent investigate → resolve) so prevention recommendations exist
-4. **Create demo branches**:
-   ```bash
-   # demo/bad-change — for Release Manager PRR Gate demo
-   git checkout -b demo/bad-change
-   # Remove error handling from order-service, add unencrypted S3 bucket
-   git push origin demo/bad-change
-
-   # demo/add-discount — for Autonomous Release Testing demo
-   git checkout main
-   git checkout -b demo/add-discount
-   # Add discount logic to order-service
-   git push origin demo/add-discount
-   ```
-5. **Configure Kiro integration** — connect Kiro to DevOps Agent via Remote MCP:
-   - Create an Agent Space in [DevOps Agent console](https://us-east-1.console.aws.amazon.com/devops-agent/)
-   - Generate Personal Access Token: Agent Space → Settings → Access Tokens → Create (scope: `agent:operate`)
-   - Set environment variable: `export DEVOPS_AGENT_TOKEN=aidevops_v1_...`
-   - The workspace MCP config at `.kiro/settings/mcp.json` needs:
-     ```json
-     {
-       "mcpServers": {
-         "power-aws-devops-agent-aws-devops-agent": {
-           "url": "https://connect.aidevops.us-east-1.api.aws/mcp",
-           "headers": { "Authorization": "Bearer ${DEVOPS_AGENT_TOKEN}" },
-           "timeout": 120000
-         },
-         "power-aws-devops-agent-aws-devops-agent-sigv4": {
-           "command": "uvx",
-           "timeout": 120000,
-           "args": ["mcp-proxy-for-aws@latest", "https://connect.aidevops.us-east-1.api.aws/mcp", "--service", "aidevops", "--region", "us-east-1"],
-           "env": { "AWS_PROFILE": "AWSAdministratorAccess-223057881262" }
-         }
-       }
-     }
-     ```
-   - Restart Kiro after setting the token and config
-6. **Upload Custom Skill**: circuit-breaker-playbook.md to Agent Space
-7. **Add Knowledge Items**: architecture-rules.md content to Agent Space
-8. **Connect integrations**: GitHub, CloudWatch, Slack (#summit-store-incidents)
-9. **Verify**: Ask in On-Demand Chat "What services are in my repository?"
-
-### Demo Timing Note
-- Pre-trigger the investigation 5 minutes before the demo segment
-- Keep load test running throughout the presentation for real-time metrics
-- Prevention recommendations should be pre-generated from a previous investigation cycle
-
-### Load Testing (Fargate)
-
-The load test runs as a Fargate task (no laptop dependency):
-
-```bash
-# Build and push the k6 container
-cd loadtest
-docker build --platform linux/amd64 -t summit-store-loadtest .
-docker tag summit-store-loadtest:latest <ACCOUNT>.dkr.ecr.us-east-1.amazonaws.com/summit-store-loadtest:latest
-docker push <ACCOUNT>.dkr.ecr.us-east-1.amazonaws.com/summit-store-loadtest:latest
-
-# Run 24h load test on Fargate
-aws ecs run-task --cluster summit-store --task-definition summit-store-loadtest:1 \
-  --launch-type FARGATE \
-  --network-configuration 'awsvpcConfiguration={subnets=["<SUBNET>"],assignPublicIp=ENABLED}'
-
-# Monitor via CloudWatch Logs: /ecs/summit-store/loadtest
+# Trigger incident (reduce gateway timeout)
+./scripts/trigger-incident.sh
 ```
 
 ## Project Structure
 
 ```
 summit-store/
-├── infrastructure/         CDK stacks (TypeScript)
+├── infrastructure/           CDK stacks (TypeScript)
+│   ├── lib/                  Stack definitions
+│   └── lambda/               Lambda functions (webhook trigger)
 ├── services/
-│   ├── order-service/      Node.js 22 / Express
-│   ├── payment-service/    Python 3.12 / Flask
-│   └── inventory-service/  Python 3.12 / Flask
-├── .github/workflows/      CI/CD (GitHub Actions)
-├── loadtest/               k6 scripts + Dockerfile (Fargate load testing)
-├── scripts/                Utility scripts
-├── .devopsagent/           DevOps Agent configuration
-│   ├── skills/             Custom Skills
-│   ├── knowledge/          Knowledge Items
-│   ├── standards/          Release Standards
-│   └── agents/             Custom Agent definitions
-└── README.md
+│   ├── order-service/        Node.js / Express
+│   ├── payment-service/      Python / Flask
+│   └── inventory-service/    Python / Flask
+├── mcp-server/               Custom MCP server (26 tools)
+│   └── src/
+│       ├── index.mjs         stdio entry point
+│       ├── lambda.mjs        API Gateway Lambda handler
+│       └── tools/            Tool implementations (5 categories)
+├── .github/workflows/        CI/CD (GitHub Actions)
+├── loadtest/                 k6 scripts
+├── scripts/                  Utility scripts
+├── .devopsagent/             Skills, knowledge, standards, agents
+│   └── skills/
+│       ├── summit-store-architecture.md
+│       ├── circuit-breaker-playbook.md
+│       └── skip-scheduled-maintenance.md
 ```

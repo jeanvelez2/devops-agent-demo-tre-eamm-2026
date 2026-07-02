@@ -102,6 +102,8 @@ export class ServicesStack extends cdk.Stack {
     const orderService = new ecs.FargateService(this, 'OrderService', {
       cluster, taskDefinition: orderTd, desiredCount: 2,
       assignPublicIp: true,
+      circuitBreaker: { enable: true, rollback: true },
+      minHealthyPercent: 100,
     });
     listener.addTargets('OrderTarget', {
       port: 3000, targets: [orderService], protocol: elbv2.ApplicationProtocol.HTTP,
@@ -155,6 +157,8 @@ export class ServicesStack extends cdk.Stack {
     const paymentService = new ecs.FargateService(this, 'PaymentService', {
       cluster, taskDefinition: paymentTd, desiredCount: 1,
       assignPublicIp: true,
+      circuitBreaker: { enable: true, rollback: true },
+      minHealthyPercent: 100,
       cloudMapOptions: { name: 'payment-service', dnsRecordType: servicediscovery.DnsRecordType.A, cloudMapNamespace: namespace },
     });
     paymentService.connections.allowFrom(orderService, ec2.Port.tcp(5000));
@@ -212,6 +216,8 @@ export class ServicesStack extends cdk.Stack {
     new ecs.FargateService(this, 'InventoryService', {
       cluster, taskDefinition: inventoryTd, desiredCount: 1,
       assignPublicIp: true,
+      circuitBreaker: { enable: true, rollback: true },
+      minHealthyPercent: 100,
       cloudMapOptions: { name: 'inventory-service', dnsRecordType: servicediscovery.DnsRecordType.A, cloudMapNamespace: namespace },
     });
 
