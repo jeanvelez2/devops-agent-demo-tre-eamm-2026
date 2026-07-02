@@ -13,7 +13,7 @@ app = Flask(__name__)
 xray_recorder.configure(service='payment-service')
 XRayMiddleware(app, xray_recorder)
 
-GATEWAY_TIMEOUT_MS = int(os.environ.get('GATEWAY_TIMEOUT_MS', '5000'))
+GATEWAY_TIMEOUT_MS = int(os.environ.get('GATEWAY_TIMEOUT_MS', '100'))
 GATEWAY_URL = os.environ.get('GATEWAY_URL', 'https://httpbin.org/delay/1')
 
 
