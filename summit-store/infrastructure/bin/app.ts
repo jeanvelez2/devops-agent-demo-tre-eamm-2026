@@ -33,7 +33,7 @@ new CdnStack(app, 'SummitStoreCdn', {
 
 new DevOpsAgentTriggerStack(app, 'SummitStoreDevOpsAgentTrigger', {
   env,
-  alarmTopicArn: 'arn:aws:sns:us-east-1:223057881262:summit-store-alarms',
+  alarmTopicArn: `arn:aws:sns:us-east-1:${process.env.CDK_DEFAULT_ACCOUNT}:summit-store-alarms`,
 });
 
 new McpServerStack(app, 'SummitStoreMcpServer', { env });

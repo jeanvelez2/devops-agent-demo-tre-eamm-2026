@@ -405,7 +405,7 @@ function handlePipelineStatus(serviceName) {
   const pipelines = {
     'order-service': {
       service: 'order-service',
-      repository: 'jeanvelez2/devops-agent-demo-tre-eamm-2026',
+      repository: 'summit-store',
       branch: 'main',
       lastBuild: {
         id: 'build-9847',
@@ -428,7 +428,7 @@ function handlePipelineStatus(serviceName) {
     },
     'payment-service': {
       service: 'payment-service',
-      repository: 'jeanvelez2/devops-agent-demo-tre-eamm-2026',
+      repository: 'summit-store',
       branch: 'main',
       lastBuild: {
         id: 'build-9852',
@@ -451,7 +451,7 @@ function handlePipelineStatus(serviceName) {
     },
     'inventory-service': {
       service: 'inventory-service',
-      repository: 'jeanvelez2/devops-agent-demo-tre-eamm-2026',
+      repository: 'summit-store',
       branch: 'main',
       lastBuild: {
         id: 'build-9845',

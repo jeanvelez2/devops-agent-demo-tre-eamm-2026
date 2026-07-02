@@ -53,6 +53,13 @@ export class McpServerStack extends cdk.Stack {
       resources: ['*'],
     }));
 
+    mcpFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: [
+        'elasticloadbalancing:DescribeLoadBalancers',
+      ],
+      resources: ['*'],
+    }));
+
     // ─── API Gateway HTTP API ────────────────────────────────────────────────────
     const httpApi = new apigateway.HttpApi(this, 'McpHttpApi', {
       apiName: 'summit-store-mcp',

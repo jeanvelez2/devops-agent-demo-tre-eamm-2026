@@ -5,9 +5,28 @@
 
 import { CloudWatchClient, GetMetricDataCommand } from '@aws-sdk/client-cloudwatch';
 import { CostExplorerClient, GetCostAndUsageCommand } from '@aws-sdk/client-cost-explorer';
+import { ElasticLoadBalancingV2Client, DescribeLoadBalancersCommand } from '@aws-sdk/client-elastic-load-balancing-v2';
 
 const cw = new CloudWatchClient({ region: 'us-east-1' });
 const ce = new CostExplorerClient({ region: 'us-east-1' });
+const elbv2 = new ElasticLoadBalancingV2Client({ region: 'us-east-1' });
+
+// Cache ALB full name (discovered once per Lambda cold start)
+let cachedAlbFullName = process.env.ALB_FULL_NAME || null;
+
+async function getAlbFullName() {
+  if (cachedAlbFullName) return cachedAlbFullName;
+  try {
+    // Discover ALB by listing all and finding the one with 'summit' in the name
+    const resp = await elbv2.send(new DescribeLoadBalancersCommand({}));
+    const alb = resp.LoadBalancers?.find(lb => lb.LoadBalancerName?.toLowerCase().includes('summit'));
+    if (alb) {
+      cachedAlbFullName = alb.LoadBalancerArn.split(':loadbalancer/')[1];
+      return cachedAlbFullName;
+    }
+  } catch (e) { /* fall through */ }
+  return null;
+}
 
 export const monitoringTools = [
   {
@@ -249,11 +268,14 @@ async function getResourceUtilization({ resource_type = 'all' }) {
     );
   }
   if (resource_type === 'all' || resource_type === 'alb') {
-    queries.push(
-      { id: 'alb_requests', ns: 'AWS/ApplicationELB', metric: 'RequestCount', dims: [{ Name: 'LoadBalancer', Value: 'app/Summit-ALBAE-riHCsL2wW7au/992e68178971b6c1' }], stat: 'Sum' },
-      { id: 'alb_latency', ns: 'AWS/ApplicationELB', metric: 'TargetResponseTime', dims: [{ Name: 'LoadBalancer', Value: 'app/Summit-ALBAE-riHCsL2wW7au/992e68178971b6c1' }], stat: 'Average' },
-      { id: 'alb_5xx', ns: 'AWS/ApplicationELB', metric: 'HTTPCode_Target_5XX_Count', dims: [{ Name: 'LoadBalancer', Value: 'app/Summit-ALBAE-riHCsL2wW7au/992e68178971b6c1' }], stat: 'Sum' },
-    );
+    const albName = await getAlbFullName();
+    if (albName) {
+      queries.push(
+        { id: 'alb_requests', ns: 'AWS/ApplicationELB', metric: 'RequestCount', dims: [{ Name: 'LoadBalancer', Value: albName }], stat: 'Sum' },
+        { id: 'alb_latency', ns: 'AWS/ApplicationELB', metric: 'TargetResponseTime', dims: [{ Name: 'LoadBalancer', Value: albName }], stat: 'Average' },
+        { id: 'alb_5xx', ns: 'AWS/ApplicationELB', metric: 'HTTPCode_Target_5XX_Count', dims: [{ Name: 'LoadBalancer', Value: albName }], stat: 'Sum' },
+      );
+    }
   }
   if (resource_type === 'all' || resource_type === 'sqs') {
     queries.push(
@@ -345,10 +367,17 @@ async function detectCostAnomalies({ threshold_percent = 150 }) {
   const metricsToCheck = [
     { id: 'ddb_read', ns: 'AWS/DynamoDB', metric: 'ConsumedReadCapacityUnits', dims: [{ Name: 'TableName', Value: 'summit-store-inventory' }], label: 'DynamoDB Read Capacity' },
     { id: 'ddb_write', ns: 'AWS/DynamoDB', metric: 'ConsumedWriteCapacityUnits', dims: [{ Name: 'TableName', Value: 'summit-store-inventory' }], label: 'DynamoDB Write Capacity' },
-    { id: 'alb_requests', ns: 'AWS/ApplicationELB', metric: 'RequestCount', dims: [{ Name: 'LoadBalancer', Value: 'app/Summit-ALBAE-riHCsL2wW7au/992e68178971b6c1' }], label: 'ALB Request Count' },
-    { id: 'alb_5xx', ns: 'AWS/ApplicationELB', metric: 'HTTPCode_Target_5XX_Count', dims: [{ Name: 'LoadBalancer', Value: 'app/Summit-ALBAE-riHCsL2wW7au/992e68178971b6c1' }], label: 'ALB 5XX Errors' },
     { id: 'sqs_sent', ns: 'AWS/SQS', metric: 'NumberOfMessagesSent', dims: [{ Name: 'QueueName', Value: 'summit-store-orders' }], label: 'SQS Messages Sent' },
   ];
+
+  // Add ALB metrics if discoverable
+  const albName = await getAlbFullName();
+  if (albName) {
+    metricsToCheck.push(
+      { id: 'alb_requests', ns: 'AWS/ApplicationELB', metric: 'RequestCount', dims: [{ Name: 'LoadBalancer', Value: albName }], label: 'ALB Request Count' },
+      { id: 'alb_5xx', ns: 'AWS/ApplicationELB', metric: 'HTTPCode_Target_5XX_Count', dims: [{ Name: 'LoadBalancer', Value: albName }], label: 'ALB 5XX Errors' },
+    );
+  }
 
   try {
     // Get 7-day baseline
