@@ -1,7 +1,9 @@
 .omni/
 .claude/
-.github/
-!summit-store/.github/
 .cursor/
 .kiro/
 .agents/
+
+# Ignore root .github except workflows
+.github/*
+!.github/workflows/
