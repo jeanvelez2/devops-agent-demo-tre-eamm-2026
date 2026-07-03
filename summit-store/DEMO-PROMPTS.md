@@ -5,19 +5,25 @@
 - [ ] Start load test: `./scripts/generate-load.sh`
 - [ ] Verify services healthy: `curl https://$CLOUDFRONT_URL/health`
 - [ ] Confirm DevOps Agent web app is accessible
-- [ ] Have PR #1 open in browser tab (`https://github.com/<GITHUB_OWNER>/<REPO_NAME>/pull/1`)
+- [ ] Have PR #1 open in browser tab (`https://github.com/jeanvelez2/devops-agent-demo-tre-eamm-2026/pull/1`)
 - [ ] Have Kiro open with the summit-store workspace
 
 ---
 
-## DEMO 1: Topology Viewer (2 min)
+## DEMO 1: Topology Viewer + Pipeline View + Summary Report (3 min)
 
-**Action:** Open the Topology Viewer in the DevOps Agent Operator Web App.
+**Action:** Open the Topology Viewer in the DevOps Agent Operator Web App. Click through all 4 views. Then show Summary Report.
 
 **Talking points:**
 - System View: order-service → payment-service → external gateway dependency chain
 - Resource View: DynamoDB table, Lambda function, ALB, SQS queues
+- **Pipeline View** (NEW): GitHub Actions → Build → Test → Deploy (shows missing canary stage)
 - "This was built automatically from infrastructure, code, and observability — I didn't draw this."
+- "The Pipeline view shows CI/CD topology — it learned my deployment stages and found the gap."
+
+**Then show Summary Report:**
+- Open Artifacts → Summary Report tab
+- "This is a living architecture doc — auto-generated, always current, shareable with the team."
 
 ---
 
@@ -77,34 +83,44 @@ curl -X POST https://$CLOUDFRONT_URL/chaos \
 
 ---
 
-## DEMO 5: On-Demand Chat / Power Chat (2 min)
+## DEMO 5: On-Demand Chat + Voice Input + Inline Charts (3 min)
+
+**Pro tip:** Use **voice input** (microphone icon) for the first query to showcase the feature.
 
 **Prompts to use in DevOps Agent chat:**
+
+### Inline Chart — Voice Input (SPEAK this one)
+```
+Show me the p99 latency trend for order-service over the last 24 hours.
+```
+→ Renders inline chart directly in the conversation.
+
+### Inline Data Table — Cost Analysis (uses MCP tools)
+```
+Run a cost analysis on summit-store. Are there any anomalies or optimization opportunities?
+```
+→ Renders inline data table with cost breakdown by service.
 
 ### Architecture & Dependencies
 ```
 What services depend on payment-service and what happens when it degrades?
 ```
 
-### Deployment Correlation
-```
-Show me recent deployments and check if any correlate with the current incident.
-```
-
-### Cost Analysis (uses MCP tools)
-```
-Run a cost analysis on summit-store. Are there any anomalies or optimization opportunities?
-```
-
-### Custom Chart
+### Custom Chart — Error Rate
 ```
 Show me the error rate trend for order-service over the last 7 days.
 ```
+→ Another inline chart. "No dashboard needed — it renders right here."
 
-### Architecture-Aware Answer (uses Knowledge Skill)
+### Architecture-Aware Answer (uses Knowledge Skill + AGENTS.md)
 ```
 What would a circuit breaker look like for our payment-service? Include implementation steps specific to our architecture.
 ```
+
+**Talking points:**
+- "I spoke that first query — voice input, transcribed in real-time"
+- "Charts and tables render inline — no switching to CloudWatch dashboards"
+- "The agent references our specific stack because I steered it with AGENTS.md instructions and architecture skills"
 
 ---
 
@@ -132,6 +148,8 @@ Run a release readiness review on PR #1 in my connected GitHub repository.
 
 **Action:** Trigger from the web app or chat.
 
+**Test profile ID:** `ki-88a3e07b-88b2-4158-adf8-4051602bf6d8`
+
 **In DevOps Agent chat:**
 ```
 Run release testing on my summit-store-api test profile. Focus on the order creation flow and payment processing.
@@ -148,7 +166,8 @@ Verify order creation with valid and invalid inputs, payment processing edge cas
 - Agent generates test plan based on the API spec
 - Tests execute against live CloudFront endpoint
 - Results: test cases, pass/fail, reproduction steps for failures
-- "It generated these tests automatically from my OpenAPI spec — I didn't write a single test case."
+- Show `release-tests.yml` in GitHub Actions — "This also runs automatically on every push to main"
+- "It generated these tests automatically — I didn't write a single test case."
 
 ---
 
@@ -191,7 +210,16 @@ What are the known architectural weaknesses in summit-store and what's the remed
 What did the last custom agent execution find? Show me the results.
 ```
 
-**Talking point:** "These run while I sleep. One monitors costs, another checks capacity, another reviews security posture. Cron jobs with AI reasoning."
+**In chat (show specific agents):**
+```
+Show me the security posture audit results. Were any IAM violations found?
+```
+
+```
+What did the log anomaly agent detect? Are there new error patterns?
+```
+
+**Talking point:** "Three agents run while I sleep — capacity checks, security posture audits, and log anomaly detection. Cron jobs with AI reasoning. The security agent already found our overly broad IAM role."
 
 ---
 
@@ -201,15 +229,113 @@ What did the last custom agent execution find? Show me the results.
 
 **Show:**
 - Capabilities tab → MCP Servers → summit-store-ops
-- 26 tools available across 5 categories
-- Tool names visible: get_service_health, get_deployment_diff, detect_cost_anomalies, etc.
+- 31 tools available across 6 categories (operations, incidents, knowledge, deployments, monitoring, **feature flags**)
+- Tool names visible: get_service_health, get_deployment_diff, detect_cost_anomalies, get_feature_flags, toggle_feature_flag, etc.
 
 **In chat (show it being used):**
 ```
 Use the summit-store-ops MCP tools to get the full deployment diff for deploy-2026-0628-001 and explain the risk.
 ```
 
-**Talking point:** "Any data source your team has — incident management, deployment systems, architecture docs — you can expose as an MCP server. The agent discovers the tools automatically and uses them during investigations. This one has 26 tools I built in an afternoon."
+**Talking point:** "Any data source your team has — incident management, deployment systems, architecture docs, feature flags — you can expose as an MCP server. The agent discovers the tools automatically and uses them during investigations. This one has 31 tools I built in an afternoon."
+
+---
+
+## DEMO 11: Feature Flag Kill Switch (2 min)
+
+**Action:** Show feature flags as a faster-than-rollback incident containment option.
+
+**In chat (query flags):**
+```
+What feature flags are available for payment-service? Are any marked as kill switches?
+```
+
+**In chat (containment during incident):**
+```
+The payment-gateway-v2 flag was recently enabled and we're seeing errors. What's the fastest containment option?
+```
+
+**In chat (assess coverage):**
+```
+Assess feature flag coverage for order-service. What critical paths are unprotected?
+```
+
+**In chat (show audit trail):**
+```
+Show me the feature flag audit log for the last 72 hours. Who changed what?
+```
+
+**Talking point:** "Feature flag toggle is instant — under 30 seconds to contain an incident vs 3-5 minutes for a rollback. The agent knows which flags are kill switches and recommends toggling them before attempting a full rollback. Every toggle is audited."
+
+---
+
+## DEMO 12: Knowledge System — AGENTS.md, Memories, Skills Gallery (2 min)
+
+**Action:** Show the Knowledge page in the web app (3 tabs: Instructions, Skills, Memories).
+
+**Show — Instructions (AGENTS.md):**
+- Open Instructions tab → show the agent-level instructions
+- "For payment-service incidents: always check GATEWAY_TIMEOUT_MS value first"
+- "Prefer feature flag toggles over rollbacks"
+- "These are injected into every agent response"
+
+**Show — Memories:**
+- Memories created from prior investigations:
+  - "payment-service gateway timeout at 100ms was root cause of INC-2026-0042"
+  - "DynamoDB GSI throttling between 03:00-04:00 UTC is expected from nightly batch"
+
+**Show — Community Skills Gallery (quick flash):**
+- Browse → Import → "Don't start from zero"
+
+**In chat (demonstrate memory recall):**
+```
+Payment-service latency is spiking again. What did you learn from the last time this happened?
+```
+
+**In chat (demonstrate AGENTS.md influence):**
+```
+What should I check first when payment-service has high error rates?
+```
+→ Agent responds with GATEWAY_TIMEOUT_MS check (steered by AGENTS.md).
+
+**Talking points:**
+- "AGENTS.md is your system prompt. Memories are what it learned. Skills are what you taught it."
+- "After the first incident it skips dead ends — MTTR drops from 45 to 8 minutes."
+- "Community Skills Gallery means you can import proven patterns from other teams with one click."
+
+---
+
+## DEMO 13: Quality Dashboard + Human Labeling (1 min)
+
+**Action:** Show the labeling UI and quality dashboard in the web app.
+
+**Show:**
+- Completed investigation with labeling buttons (Accurate / Inaccurate / Partially Correct)
+- Quality dashboard trending: accuracy 72% → 91%, MTTR 45 min → 8 min, recommendation acceptance 60% → 85%
+
+**Talking point:** "We label whether the agent got it right. This governance layer proves the system is getting better over time. MTTR dropped from 45 to 8 minutes — that's the business case."
+
+---
+
+## DEMO 14: A2A Protocol + Multi-Agent Orchestration (1 min)
+
+**Action:** Show headless invocation from Kiro via A2A protocol.
+
+**In Kiro:**
+```
+Check if my current code changes would pass a release readiness review before I push.
+```
+
+**In Kiro (health check without leaving IDE):**
+```
+What's the current health status of summit-store? Any active incidents?
+```
+
+**Show:**
+- Kiro calls DevOps Agent via A2A (no web app switch)
+- Results returned directly in IDE
+
+**Talking point:** "DevOps Agent isn't just a web app — it's a headless service. Any coding agent, CI/CD system, or planning agent can invoke it via A2A or MCP protocols. This is 'DevOps Agent as an API'."
 
 ---
 
@@ -248,6 +374,32 @@ git diff main..demo/canary-deployment -- summit-store/.github/workflows/payment-
 
 # IAM scope fix:
 git diff main..demo/scope-iam -- summit-store/infrastructure/lib/services-stack.ts
+```
+
+---
+
+## BONUS: Feature Flag Containment Flow
+
+Use these prompts to show the flag-based incident response:
+
+### Step 1 — Identify the problem
+```
+Payment-service errors spiked to 40% after the latest flag change. What flags were recently modified?
+```
+
+### Step 2 — Recommend containment
+```
+Should I disable payment-gateway-v2 as containment? What's the impact?
+```
+
+### Step 3 — Execute toggle
+```
+Disable the payment-gateway-v2 flag. Reason: incident containment for error rate spike.
+```
+
+### Step 4 — Verify containment
+```
+Check payment-service error rate after the flag toggle. Is it recovering?
 ```
 
 ---
@@ -297,4 +449,16 @@ List all services in my topology and their current health status.
 
 ```
 What are the open incidents and who is on call right now?
+```
+
+```
+What feature flags are configured for summit-store? Which ones are kill switches?
+```
+
+```
+Show me all custom agent execution results from the past 24 hours.
+```
+
+```
+What did you learn from past investigations? Show me your memories for payment-service.
 ```

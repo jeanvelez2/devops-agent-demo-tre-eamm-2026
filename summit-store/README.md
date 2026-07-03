@@ -12,7 +12,7 @@ Client → CloudFront (WAF) → ALB → order-service (Node.js)
 CloudWatch Alarms → SNS → Lambda → DevOps Agent Webhook
                  → EventBridge ────→ (same Lambda)
 
-Custom MCP Server (26 tools) → API Gateway → Lambda
+Custom MCP Server (31 tools) → API Gateway → Lambda
 ```
 
 ## Services
@@ -33,7 +33,7 @@ Custom MCP Server (26 tools) → API Gateway → Lambda
 | SummitStoreMonitoring | CloudWatch alarms, SNS topic |
 | SummitStoreCdn | CloudFront distribution + WAF |
 | SummitStoreDevOpsAgentTrigger | Lambda webhook trigger, SNS subscription, EventBridge rule, Secrets Manager |
-| SummitStoreMcpServer | API Gateway + Lambda hosting custom MCP server (26 tools) |
+| SummitStoreMcpServer | API Gateway + Lambda hosting custom MCP server (31 tools, 6 categories) |
 
 ## DevOps Agent Integration
 
@@ -43,13 +43,17 @@ Custom MCP Server (26 tools) → API Gateway → Lambda
 | GitHub (<GITHUB_OWNER>/<REPO_NAME>) | Connected (READ_WRITE) |
 | Slack (#summit-store-incidents) | Connected |
 | Webhook (HMAC) | Configured — alarms auto-trigger investigations |
-| Custom MCP Server (summit-store-ops, 26 tools) | Connected via SigV4 |
+| Custom MCP Server (summit-store-ops, 31 tools) | Connected via SigV4 |
 | Architecture Skill | Uploaded (Generic) |
 | Circuit Breaker Skill | Uploaded (Incident Mitigation) |
 | Skip Scheduled Maintenance Skill | Uploaded (Incident Triage) |
-| Custom Agents (3) | Running on 6-hour schedules |
-| Release Readiness Review | Enabled |
-| Release Testing (API) | Test profile configured |
+| Skip Known Flapping Skill | Uploaded (Incident Triage) |
+| Feature Flag Containment Skill | Uploaded (Incident Mitigation) |
+| Custom Agents (4) | Running on schedules (capacity, security, logs, cost) |
+| Release Readiness Review | Enabled (auto-trigger on PRs) |
+| Release Testing (API) | Test profile `ki-88a3e07b-88b2-4158-adf8-4051602bf6d8` |
+| Release Testing CI/CD | GitHub Actions workflow (`release-tests.yml`) |
+| AGENTS.md Instructions | Uploaded (steers all agent behavior) |
 
 ## Endpoints
 
@@ -57,7 +61,8 @@ Custom MCP Server (26 tools) → API Gateway → Lambda
 |----------|-----|-------------|
 | CloudFront (HTTPS) | `<CLOUDFRONT_URL>` | CDK output `SummitStoreCdn.CloudFrontUrl` |
 | ALB (HTTP) | `<ALB_URL>` | CDK output `SummitStoreServices.AlbUrl` |
-| MCP Server | `<MCP_ENDPOINT>` | CDK output `SummitStoreMcpServer.McpEndpointUrl` |
+| MCP Server | `https://baeb2x1g0g.execute-api.us-east-1.amazonaws.com/mcp` | CDK output `SummitStoreMcpServer.McpEndpointUrl` |
+| DevOps Agent Webhook | `https://event-ai.us-east-1.api.aws/webhook/generic/ea3eb0b9-3bac-495a-8ea5-267487f291b5` | Agent Space → Webhooks |
 
 ## Intentional Weaknesses (for DevOps Agent to discover)
 
@@ -107,17 +112,34 @@ summit-store/
 │   ├── order-service/        Node.js / Express
 │   ├── payment-service/      Python / Flask
 │   └── inventory-service/    Python / Flask
-├── mcp-server/               Custom MCP server (26 tools)
+├── mcp-server/               Custom MCP server (31 tools)
 │   └── src/
 │       ├── index.mjs         stdio entry point
 │       ├── lambda.mjs        API Gateway Lambda handler
-│       └── tools/            Tool implementations (5 categories)
+│       └── tools/            Tool implementations (6 categories)
 ├── .github/workflows/        CI/CD (GitHub Actions)
+│   ├── order-service.yml     Deploy order-service to ECS
+│   ├── inventory-service.yml Deploy inventory-service to ECS
+│   └── release-tests.yml     DevOps Agent autonomous release testing
 ├── loadtest/                 k6 scripts
 ├── scripts/                  Utility scripts
 ├── .devopsagent/             Skills, knowledge, standards, agents
-│   └── skills/
-│       ├── summit-store-architecture.md
-│       ├── circuit-breaker-playbook.md
-│       └── skip-scheduled-maintenance.md
+│   ├── AGENTS.md             Agent-level instructions (system prompt)
+│   ├── skills/
+│   │   ├── summit-store-architecture.md
+│   │   ├── circuit-breaker-playbook.md
+│   │   ├── feature-flag-containment.md
+│   │   ├── skip-scheduled-maintenance.md
+│   │   └── skip-known-flapping.md
+│   ├── standards/
+│   │   └── release-standards.md
+│   └── agents/
+│       ├── capacity-check.yaml
+│       ├── security-posture.yaml
+│       ├── log-anomaly.yaml
+│       └── cost-anomaly.yaml
+├── DEMO-RUNBOOK.md           Step-by-step demo execution (14 demos)
+├── DEMO-PROMPTS.md           All prompts and talking points
+├── SETUP.md                  Infrastructure deployment guide
+└── SETUP-DEVOPS-AGENT.md     DevOps Agent configuration guide
 ```

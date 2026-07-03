@@ -1,0 +1,64 @@
+name: log-anomaly
+description: Reviews CloudWatch Logs from the past 24 hours across all summit-store services. Flags new exception patterns, error rate spikes, and unusual log volume changes compared to 7-day baseline.
+trigger:
+  type: schedule
+  cron: "0 */6 * * *"  # Every 6 hours
+workflow:
+  steps:
+    - name: query-error-logs
+      action: cloudwatch-logs-insights
+      parameters:
+        logGroups:
+          - /ecs/summit-store/order-service
+          - /ecs/summit-store/payment-service
+          - /ecs/summit-store/inventory-service
+        query: |
+          fields @timestamp, @message, service, level, traceId
+          | filter level = "ERROR" or level = "WARN"
+          | stats count(*) as errorCount by service, @message
+          | sort errorCount desc
+          | limit 20
+        timeRange: 24h
+
+    - name: compare-baseline
+      action: cloudwatch-logs-insights
+      parameters:
+        logGroups:
+          - /ecs/summit-store/order-service
+          - /ecs/summit-store/payment-service
+          - /ecs/summit-store/inventory-service
+        query: |
+          fields @timestamp, service, level
+          | filter level = "ERROR"
+          | stats count(*) as errorCount by service, bin(1d) as day
+          | sort day desc
+        timeRange: 7d
+
+    - name: detect-new-patterns
+      action: evaluate
+      parameters:
+        compare: steps.query-error-logs.results
+        against: steps.compare-baseline.results
+        method: "flag messages appearing in last 24h that were NOT seen in previous 6 days"
+      condition: "new error patterns detected OR error rate > 200% of 7-day average"
+      on_true: notify
+      on_false: complete
+
+    - name: notify
+      action: slack-post
+      parameters:
+        channel: "#summit-store-incidents"
+        message: |
+          :mag: Log Anomaly Detection — New Patterns Found
+
+          **Analysis period**: Last 24 hours vs 7-day baseline
+          **Services analyzed**: order-service, payment-service, inventory-service
+
+          **New error patterns** (not seen in previous 7 days):
+          {{ steps.detect-new-patterns.new_patterns | join('\n') }}
+
+          **Error rate changes**:
+          {{ steps.detect-new-patterns.rate_changes | join('\n') }}
+
+          Recommendation: Investigate new patterns before they escalate.
+          Use DevOps Agent chat: "What's causing the new errors in {{ steps.detect-new-patterns.top_service }}?"

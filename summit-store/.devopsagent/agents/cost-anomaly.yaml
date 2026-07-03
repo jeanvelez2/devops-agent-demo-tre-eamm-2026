@@ -1,0 +1,62 @@
+name: cost-anomaly
+description: Monitors AWS costs for summit-store resources daily. Compares last 24h spending against 7-day baseline to detect anomalies, identifies top cost drivers, and flags unexpected spikes from NAT Gateway, DynamoDB, or ECS scaling events.
+trigger:
+  type: schedule
+  cron: "0 8 * * *"  # Daily at 8:00 UTC (start of business)
+workflow:
+  steps:
+    - name: get-cost-breakdown
+      action: mcp-tool
+      parameters:
+        tool: get_cost_summary
+        arguments:
+          period_days: 7
+          group_by: SERVICE
+
+    - name: detect-anomalies
+      action: mcp-tool
+      parameters:
+        tool: detect_cost_anomalies
+        arguments:
+          threshold_percent: 150
+
+    - name: check-nat-gateway
+      action: cloudwatch-query
+      parameters:
+        namespace: AWS/NATGateway
+        metricName: BytesProcessed
+        stat: Sum
+        period: 86400
+      note: "NAT Gateway is often the hidden cost driver for VPC-based ECS services"
+
+    - name: evaluate-findings
+      action: evaluate
+      condition: "steps.detect-anomalies.anomaliesDetected > 0 OR steps.get-cost-breakdown.dailyAverage > '$15.00'"
+      on_true: notify
+      on_false: complete
+
+    - name: notify
+      action: slack-post
+      parameters:
+        channel: "#summit-store-incidents"
+        message: |
+          :money_with_wings: Daily Cost Report — summit-store
+
+          **Period**: Last 7 days
+          **Total spend**: {{ steps.get-cost-breakdown.totalCost }}
+          **Daily average**: {{ steps.get-cost-breakdown.dailyAverage }}
+
+          **Top cost drivers**:
+          {{ steps.get-cost-breakdown.breakdown[:5] | format_table }}
+
+          **Anomalies detected**: {{ steps.detect-anomalies.anomaliesDetected }}
+          {% for anomaly in steps.detect-anomalies.anomalies %}
+          - :warning: {{ anomaly.resource }}: {{ anomaly.currentValue }} ({{ anomaly.percentOfBaseline }} of baseline) — Severity: {{ anomaly.severity }}
+          {% endfor %}
+
+          **NAT Gateway data processed (24h)**: {{ steps.check-nat-gateway.value | bytes_to_gb }} GB
+
+          {% if steps.detect-anomalies.anomaliesDetected > 0 %}
+          Recommendation: Investigate anomalous metrics. Use DevOps Agent chat:
+          "Explain the cost anomaly in {{ steps.detect-anomalies.anomalies[0].resource }} and suggest optimizations."
+          {% endif %}

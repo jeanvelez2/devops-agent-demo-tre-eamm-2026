@@ -27,6 +27,7 @@ import { incidentTools, handleIncidentTool } from './tools/incidents.mjs';
 import { knowledgeTools, handleKnowledgeTool } from './tools/knowledge.mjs';
 import { deploymentTools, handleDeploymentTool } from './tools/deployments.mjs';
 import { monitoringTools, handleMonitoringTool } from './tools/monitoring.mjs';
+import { featureFlagTools, handleFeatureFlagTool } from './tools/featureflags.mjs';
 
 // Build the full tool list and dispatch map
 const allTools = [
@@ -35,6 +36,7 @@ const allTools = [
   ...knowledgeTools,
   ...deploymentTools,
   ...monitoringTools,
+  ...featureFlagTools,
 ];
 
 const categoryMap = new Map();
@@ -43,6 +45,7 @@ for (const tool of incidentTools) categoryMap.set(tool.name, 'incidents');
 for (const tool of knowledgeTools) categoryMap.set(tool.name, 'knowledge');
 for (const tool of deploymentTools) categoryMap.set(tool.name, 'deployments');
 for (const tool of monitoringTools) categoryMap.set(tool.name, 'monitoring');
+for (const tool of featureFlagTools) categoryMap.set(tool.name, 'featureflags');
 
 // Create the MCP server
 const server = new Server(
@@ -101,6 +104,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'monitoring':
         result = await handleMonitoringTool(name, args || {});
         break;
+      case 'featureflags':
+        result = handleFeatureFlagTool(name, args || {});
+        break;
     }
 
     return {
@@ -120,7 +126,7 @@ async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error(`[summit-store-ops] MCP server started (${allTools.length} tools registered)`);
-  console.error(`[summit-store-ops] Categories: operations(${operationsTools.length}), incidents(${incidentTools.length}), knowledge(${knowledgeTools.length}), deployments(${deploymentTools.length})`);
+  console.error(`[summit-store-ops] Categories: operations(${operationsTools.length}), incidents(${incidentTools.length}), knowledge(${knowledgeTools.length}), deployments(${deploymentTools.length}), monitoring(${monitoringTools.length}), featureflags(${featureFlagTools.length})`);
 }
 
 main().catch((error) => {

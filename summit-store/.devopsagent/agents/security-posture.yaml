@@ -1,0 +1,61 @@
+name: security-posture
+description: Audits IAM roles, S3 bucket policies, and security groups for summit-store services. Flags overly broad permissions, public access, and drift from least-privilege baseline.
+trigger:
+  type: schedule
+  cron: "0 */6 * * *"  # Every 6 hours
+workflow:
+  steps:
+    - name: check-iam-roles
+      action: aws-query
+      parameters:
+        service: iam
+        operation: list-role-policies
+        filters:
+          roleNamePattern: "summit-store-*"
+      evaluate:
+        condition: "any policy contains 's3:*' or 'Action: *'"
+        on_true: flag-iam-violation
+
+    - name: check-s3-buckets
+      action: aws-query
+      parameters:
+        service: s3
+        operation: get-bucket-policy-status
+        filters:
+          bucketNamePattern: "summit-store-*"
+      evaluate:
+        condition: "any bucket has IsPublic=true OR encryption is disabled"
+        on_true: flag-s3-violation
+
+    - name: check-security-groups
+      action: aws-query
+      parameters:
+        service: ec2
+        operation: describe-security-groups
+        filters:
+          tagKey: "project"
+          tagValue: "summit-store"
+      evaluate:
+        condition: "any inbound rule allows 0.0.0.0/0 on non-HTTP ports (not 80, 443)"
+        on_true: flag-sg-violation
+
+    - name: summarize-findings
+      action: evaluate
+      condition: "any flag-*-violation triggered"
+      on_true: notify
+      on_false: complete
+
+    - name: notify
+      action: slack-post
+      parameters:
+        channel: "#summit-store-incidents"
+        message: |
+          :shield: Security Posture Audit — Findings Detected
+
+          **IAM**: {{ steps.check-iam-roles.findings | length }} role(s) with overly broad permissions
+          **S3**: {{ steps.check-s3-buckets.findings | length }} bucket(s) with public access or missing encryption
+          **Security Groups**: {{ steps.check-security-groups.findings | length }} group(s) with unrestricted non-HTTP inbound
+
+          Top finding: {{ steps.summarize-findings.top_finding }}
+
+          Run `get_known_issues(category='security')` in DevOps Agent chat for remediation steps.

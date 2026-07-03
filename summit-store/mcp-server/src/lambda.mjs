@@ -18,14 +18,16 @@ import { incidentTools, handleIncidentTool } from './tools/incidents.mjs';
 import { knowledgeTools, handleKnowledgeTool } from './tools/knowledge.mjs';
 import { deploymentTools, handleDeploymentTool } from './tools/deployments.mjs';
 import { monitoringTools, handleMonitoringTool } from './tools/monitoring.mjs';
+import { featureFlagTools, handleFeatureFlagTool } from './tools/featureflags.mjs';
 
-const allTools = [...operationsTools, ...incidentTools, ...knowledgeTools, ...deploymentTools, ...monitoringTools];
+const allTools = [...operationsTools, ...incidentTools, ...knowledgeTools, ...deploymentTools, ...monitoringTools, ...featureFlagTools];
 const categoryMap = new Map();
 for (const tool of operationsTools) categoryMap.set(tool.name, 'operations');
 for (const tool of incidentTools) categoryMap.set(tool.name, 'incidents');
 for (const tool of knowledgeTools) categoryMap.set(tool.name, 'knowledge');
 for (const tool of deploymentTools) categoryMap.set(tool.name, 'deployments');
 for (const tool of monitoringTools) categoryMap.set(tool.name, 'monitoring');
+for (const tool of featureFlagTools) categoryMap.set(tool.name, 'featureflags');
 
 function createMcpServer() {
   const server = new Server(
@@ -55,6 +57,7 @@ function createMcpServer() {
         case 'knowledge': result = handleKnowledgeTool(name, args || {}); break;
         case 'deployments': result = handleDeploymentTool(name, args || {}); break;
         case 'monitoring': result = await handleMonitoringTool(name, args || {}); break;
+        case 'featureflags': result = handleFeatureFlagTool(name, args || {}); break;
         default: return { content: [{ type: 'text', text: JSON.stringify({ error: `Unknown category: ${category}` }) }], isError: true };
       }
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
