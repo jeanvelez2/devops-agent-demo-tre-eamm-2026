@@ -1,0 +1,24 @@
+name: Deploy inventory-service
+on:
+  push:
+    branches: [main]
+    paths: ['services/inventory-service/**']
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: cd services/inventory-service && pip install -r requirements.txt && python -m pytest
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+      - uses: aws-actions/amazon-ecr-login@v2
+      - run: |
+          docker build -t inventory-service services/inventory-service
+          docker tag inventory-service:latest ${{ secrets.ECR_REPO }}/inventory-service:${{ github.sha }}
+          docker push ${{ secrets.ECR_REPO }}/inventory-service:${{ github.sha }}
+      - run: |
+          aws ecs update-service --cluster summit-store --service inventory-service --force-new-deployment

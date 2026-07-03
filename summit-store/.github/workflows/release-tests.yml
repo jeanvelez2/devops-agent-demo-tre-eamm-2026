@@ -1,0 +1,29 @@
+# Autonomous Release Testing via AWS DevOps Agent
+# Triggers after deploy to run AI-generated test plans against the live CloudFront endpoint.
+# Results appear as a GitHub Check Run on the commit/PR.
+name: Release Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  checks: write
+  contents: read
+  pull-requests: read
+
+jobs:
+  release-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger DevOps Agent Release Tests
+        uses: aws-actions/devops-agent-qa@v1
+        with:
+          webhook-url: ${{ secrets.DEVOPS_AGENT_WEBHOOK_URL }}
+          webhook-secret: ${{ secrets.DEVOPS_AGENT_WEBHOOK_SECRET }}
+          test-profile-id: ki-88a3e07b-88b2-4158-adf8-4051602bf6d8
+          test-requirement: "Verify order creation with valid and invalid inputs, payment processing including timeout edge cases, and inventory stock queries. Test error handling for malformed requests."
+        env:
+          GITHUB_TOKEN: ${{ github.token }}

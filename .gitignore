@@ -1,6 +1,7 @@
 .omni/
 .claude/
 .github/
+!summit-store/.github/
 .cursor/
 .kiro/
 .agents/

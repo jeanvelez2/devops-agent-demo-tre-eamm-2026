@@ -1,0 +1,26 @@
+# INTENTIONAL WEAKNESS: No canary deployment stage
+# TODO: Add canary deployment — DevOps Agent Prevention should recommend this
+name: Deploy order-service
+on:
+  push:
+    branches: [main]
+    paths: ['services/order-service/**']
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - run: cd services/order-service && npm ci && npm test
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+      - uses: aws-actions/amazon-ecr-login@v2
+      - run: |
+          docker build -t order-service services/order-service
+          docker tag order-service:latest ${{ secrets.ECR_REPO }}/order-service:${{ github.sha }}
+          docker push ${{ secrets.ECR_REPO }}/order-service:${{ github.sha }}
+      - run: |
+          aws ecs update-service --cluster summit-store --service order-service --force-new-deployment
