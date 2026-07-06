@@ -140,7 +140,14 @@ Run a release readiness review on PR #1 in my connected GitHub repository.
 - BLOCK: "S3 bucket created without server-side encryption — violates security standards"
 - WARNING: "Error handling removed from payment flow — any payment failure will crash the handler"
 
-**Talking point:** "It didn't just find a missing encryption flag. It understood that removing the SQS step breaks the inventory reservation flow — that's architectural understanding, not pattern matching."
+**Expected AWS Transform (mention, not live output):**
+- After review results load, flash the settings: Release Manager → Settings → Integrations → **AWS Transform** toggle
+- "When enabled, you also get code modernization recommendations — deprecated SDK patterns, structural improvements"
+- 10-second mention, not a live demo of Transform output
+
+**Talking points:**
+- "It didn't just find a missing encryption flag. It understood that removing the SQS step breaks the inventory reservation flow — that's architectural understanding, not pattern matching."
+- "You can also integrate AWS Transform here — same review pass surfaces modernization suggestions alongside the safety findings. One PR, two AI perspectives."
 
 ---
 
@@ -219,7 +226,24 @@ Show me the security posture audit results. Were any IAM violations found?
 What did the log anomaly agent detect? Are there new error patterns?
 ```
 
-**Talking point:** "Three agents run while I sleep — capacity checks, security posture audits, and log anomaly detection. Cron jobs with AI reasoning. The security agent already found our overly broad IAM role."
+**Show — Asset API (list live + show definitions as code):**
+
+```bash
+# Run this live — proves the API exists, safe to execute
+aws devopsagent list-assets \
+  --agent-space-id $AGENT_SPACE_ID \
+  --asset-type CUSTOM_AGENT \
+  --region us-east-1
+```
+
+Then open `.devopsagent/agents/cost-anomaly.yaml` in the editor:
+- "This YAML is the same agent you saw running — defined as code, version controlled"
+- "A CI/CD step provisions it via the Asset API. No ClickOps."
+
+**Talking points:**
+- "Three agents run while I sleep — capacity checks, security posture audits, and log anomaly detection. Cron jobs with AI reasoning."
+- "The security agent already found our overly broad IAM role."
+- "Everything here is available through a public API — agents, test profiles, skills, feedback. Define your agents as code in Git, deploy them through CI/CD. Infrastructure-as-code for your AI agents."
 
 ---
 
@@ -287,6 +311,22 @@ Show me the feature flag audit log for the last 72 hours. Who changed what?
 **Show — Community Skills Gallery (quick flash):**
 - Browse → Import → "Don't start from zero"
 
+**Show — Import Skills from Repository (live):**
+- Knowledge → Skills → **Import from repository**
+- Paste: `https://github.com/jeanvelez2/devops-agent-demo-tre-eamm-2026/tree/main/summit-store/.devopsagent/skills/circuit-breaker-playbook.md`
+- Show instant import with name/description auto-detected
+- Click **Sync** to pull latest version
+
+**Or via CLI (show in terminal):**
+```bash
+aws devopsagent create-asset \
+  --agent-space-id $AGENT_SPACE_ID \
+  --asset-type SKILL \
+  --name "circuit-breaker-playbook" \
+  --content '{"sourceUrl": "https://github.com/jeanvelez2/devops-agent-demo-tre-eamm-2026/tree/main/summit-store/.devopsagent/skills/circuit-breaker-playbook.md"}' \
+  --region us-east-1
+```
+
 **In chat (demonstrate memory recall):**
 ```
 Payment-service latency is spiking again. What did you learn from the last time this happened?
@@ -302,6 +342,7 @@ What should I check first when payment-service has high error rates?
 - "AGENTS.md is your system prompt. Memories are what it learned. Skills are what you taught it."
 - "After the first incident it skips dead ends — MTTR drops from 45 to 8 minutes."
 - "Community Skills Gallery means you can import proven patterns from other teams with one click."
+- "And for your own skills — import directly from your GitHub repo. Point to a SKILL.md, and it syncs on demand. Skills-as-code, version controlled, no drift."
 
 ---
 

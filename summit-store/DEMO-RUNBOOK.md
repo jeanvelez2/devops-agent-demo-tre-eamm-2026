@@ -263,10 +263,17 @@ Run a release readiness review on PR #1 in my connected GitHub repository.
 - Finding 3: "Error handling removed from payment flow"
 - Cross-repo dependency analysis
 
+**What you show — AWS Transform integration:**
+- After the review results load, show the admin settings: Release Manager → Settings → **Integrations**
+- Point to the **AWS Transform** toggle: "When enabled, release readiness reviews also surface code modernization recommendations from AWS Transform — same review pass, no extra wait"
+- "For example, it might suggest upgrading deprecated SDK patterns or modernizing handler structures alongside the safety findings"
+- This is a 10-second mention, not a live execution — Transform output depends on account configuration
+
 **What you say:**
 - "It didn't just find a missing encryption flag — it understood that removing the SQS step breaks the inventory reservation flow"
 - "That's architectural understanding, not pattern matching. It knows order-service → SQS → inventory-service is the async data path"
 - "Verdict is BLOCK — this would not ship"
+- "One more thing — you can integrate AWS Transform here. Same review, but you also get automated modernization suggestions: deprecated API patterns, SDK upgrades, structural improvements. One PR review, two AI-powered perspectives."
 
 ---
 
@@ -332,6 +339,7 @@ Run a release readiness review on the demo/fix-circuit-breaker branch.
 **What you do:**
 1. Show Goals/Custom Agents in the web app
 2. Click into a recent execution to show results
+3. Show how agents can be created programmatically via the Asset API
 
 **In chat:**
 ```
@@ -346,10 +354,37 @@ What did the last custom agent execution find?
 - Execution history with timestamps
 - Results showing specific findings (e.g., "order-service IAM role has s3:* — violates least privilege")
 
+**What you show — Asset API (programmatic agent creation):**
+
+Show in terminal — listing agents via CLI to prove the API exists:
+```bash
+# List all custom agents in the agent space
+aws devopsagent list-assets \
+  --agent-space-id $AGENT_SPACE_ID \
+  --asset-type CUSTOM_AGENT \
+  --region us-east-1
+```
+
+Then show the `.devopsagent/agents/` directory in your repo:
+- "These YAML definitions are what you'd deploy via the Asset API in a CI/CD pipeline"
+- Flash `cost-anomaly.yaml` — "This is the same agent you just saw running, defined as code"
+
+**Example of what the CI/CD step looks like (show, don't run):**
+```bash
+# In a GitHub Actions workflow or deployment script:
+aws devopsagent create-asset \
+  --agent-space-id $AGENT_SPACE_ID \
+  --asset-type CUSTOM_AGENT \
+  --name "cost-anomaly" \
+  --content file://summit-store/.devopsagent/agents/cost-anomaly.yaml \
+  --region us-east-1
+```
+
 **What you say:**
 - "Three agents run autonomously every 6 hours — capacity, security posture, and log anomaly detection"
 - "The security agent found our intentionally broad IAM role. The log agent caught a new exception pattern we hadn't noticed yet."
 - "Cron jobs with AI reasoning. They produce recommendations and post to Slack. No human in the loop."
+- "And everything here — agents, test profiles, skills, feedback — is available through a public API. I define my agents as code in Git, and a CI/CD step provisions them. Infrastructure-as-code for your AI agents."
 
 ---
 
@@ -433,11 +468,28 @@ The payment-gateway-v2 flag was recently enabled and we're seeing errors. What's
 - One-click import into your Agent Space
 - "Don't reinvent the wheel — check the gallery first"
 
+**What you show — Import Skills from Repository (live demo):**
+1. In the web app: Knowledge → Skills → **Import from repository**
+2. Paste the URL: `https://github.com/jeanvelez2/devops-agent-demo-tre-eamm-2026/tree/main/summit-store/.devopsagent/skills/circuit-breaker-playbook.md`
+3. Show it imports instantly — name, description, and content pulled from the repo
+4. Click **Sync** to show how it pulls the latest version on demand
+
+**Or via AWS CLI (show in terminal):**
+```bash
+aws devopsagent create-asset \
+  --agent-space-id $AGENT_SPACE_ID \
+  --asset-type SKILL \
+  --name "circuit-breaker-playbook" \
+  --content '{"sourceUrl": "https://github.com/jeanvelez2/devops-agent-demo-tre-eamm-2026/tree/main/summit-store/.devopsagent/skills/circuit-breaker-playbook.md"}' \
+  --region us-east-1
+```
+
 **What you say:**
 - "AGENTS.md is your system prompt for DevOps Agent. I told it: check the timeout value first for payment issues, and prefer flag toggles over rollbacks."
 - "Memories are what the agent learned on its own. Skills are what I taught it. Instructions are how I steer it."
 - "After the first incident, it remembers the pattern. Next time, it skips dead ends and goes straight to the root cause."
 - "The Community Skills Gallery means you don't start from zero — import proven patterns from other teams."
+- "And you can import skills directly from any GitHub repo — point to a SKILL.md file or a directory, and it pulls the content. Hit Sync anytime to get the latest version. No manual copy-paste, no drift between your repo and your agent."
 
 ---
 
