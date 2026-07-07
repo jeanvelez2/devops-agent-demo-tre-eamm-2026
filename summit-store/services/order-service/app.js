@@ -54,18 +54,28 @@ app.delete('/chaos', (req, res) => {
 
 app.post('/orders', async (req, res) => {
   const traceId = uuidv4();
-  const { itemId, quantity, paymentMethod } = req.body;
-  log('info', 'Order received', { traceId, itemId, quantity });
+  const { itemId, quantity, paymentMethod, discountCode } = req.body;
+  log('info', 'Order received', { traceId, itemId, quantity, discountCode });
 
   if (chaosDelayMs > 0) {
     await new Promise(r => setTimeout(r, chaosDelayMs));
+  }
+
+  // Apply discount if valid code provided
+  let amount = quantity * 10;
+  if (discountCode === 'SUMMIT20') {
+    amount = Math.round(amount * 0.8);
+    log('info', 'Discount applied: 20% off', { traceId, discountCode, newAmount: amount });
+  } else if (discountCode === 'HALF') {
+    amount = Math.round(amount * 0.5);
+    log('info', 'Discount applied: 50% off', { traceId, discountCode, newAmount: amount });
   }
 
   // TODO: Add retry logic here — currently single failure = order failure
   // INTENTIONAL WEAKNESS: No retry on payment-service calls
   try {
     const paymentUrl = new URL(`${PAYMENT_URL}/pay`);
-    const paymentBody = JSON.stringify({ orderId: traceId, amount: quantity * 10, method: paymentMethod });
+    const paymentBody = JSON.stringify({ orderId: traceId, amount, method: paymentMethod });
     const payment = await new Promise((resolve, reject) => {
       const payReq = http.request({
         hostname: paymentUrl.hostname,
