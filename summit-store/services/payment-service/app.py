@@ -3,6 +3,7 @@ import json
 import uuid
 import time
 import requests
+import pybreaker
 from flask import Flask, request, jsonify
 from aws_xray_sdk.core import xray_recorder, patch_all
 from aws_xray_sdk.ext.flask.middleware import XRayMiddleware
@@ -15,6 +16,14 @@ XRayMiddleware(app, xray_recorder)
 
 GATEWAY_TIMEOUT_MS = int(os.environ.get('GATEWAY_TIMEOUT_MS', '5000'))
 GATEWAY_URL = os.environ.get('GATEWAY_URL', 'https://httpbin.org/delay/1')
+
+# Circuit breaker: opens after 5 consecutive failures, resets after 30 seconds
+gateway_breaker = pybreaker.CircuitBreaker(
+    fail_max=5,
+    reset_timeout=30,
+    name='payment-gateway',
+    exclude=[requests.exceptions.ConnectionError],
+)
 
 
 def log(level, message, **kwargs):
@@ -50,16 +59,20 @@ def pay():
 
     log('info', 'Payment request received', traceId=trace_id, amount=amount)
 
-    # TODO: Add circuit breaker here — currently no protection against gateway failures
-    # INTENTIONAL WEAKNESS: No circuit breaker on external gateway calls
+    # Circuit breaker protects against cascade failures from gateway issues
     try:
         timeout_s = GATEWAY_TIMEOUT_MS / 1000.0
-        resp = requests.post(
+        resp = gateway_breaker.call(
+            requests.post,
             GATEWAY_URL,
             json={'amount': amount, 'orderId': order_id},
             timeout=timeout_s
         )
         resp.raise_for_status()
+    except pybreaker.CircuitBreakerError:
+        log('warn', 'Circuit breaker OPEN — fast-failing', traceId=trace_id,
+            circuitState='OPEN', failCount=gateway_breaker.fail_counter)
+        return jsonify({'success': False, 'error': 'circuit_breaker_open'}), 503
     except requests.Timeout:
         log('error', 'Gateway timeout', traceId=trace_id, timeoutMs=GATEWAY_TIMEOUT_MS)
         return jsonify({'success': False, 'error': 'gateway_timeout'}), 504
