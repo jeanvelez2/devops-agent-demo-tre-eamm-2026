@@ -1,0 +1,56 @@
+name: Deploy payment-service
+on:
+  push:
+    branches: [main]
+    paths: ['services/payment-service/**']
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: cd services/payment-service && pip install -r requirements.txt && python -m pytest
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+      - uses: aws-actions/amazon-ecr-login@v2
+      - run: |
+          docker build -t payment-service services/payment-service
+          docker tag payment-service:latest ${{ secrets.ECR_REPO }}/payment-service:${{ github.sha }}
+          docker push ${{ secrets.ECR_REPO }}/payment-service:${{ github.sha }}
+
+  canary:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+      - name: Deploy canary (10% traffic)
+        run: |
+          aws ecs update-service --cluster summit-store --service payment-service \
+            --deployment-configuration "maximumPercent=150,minimumHealthyPercent=100" \
+            --force-new-deployment
+      - name: Wait for canary stabilization (5 min)
+        run: sleep 300
+      - name: Check canary health
+        run: |
+          ERROR_RATE=$(aws cloudwatch get-metric-data \
+            --metric-data-queries '[{"Id":"errors","MetricStat":{"Metric":{"Namespace":"AWS/ApplicationELB","MetricName":"HTTPCode_Target_5XX_Count","Dimensions":[{"Name":"LoadBalancer","Value":"'$ALB_NAME'"}]},"Period":300,"Stat":"Sum"}}]' \
+            --start-time $(date -u -d '5 minutes ago' +%Y-%m-%dT%H:%M:%S) \
+            --end-time $(date -u +%Y-%m-%dT%H:%M:%S) \
+            --query 'MetricDataResults[0].Values[0]' --output text)
+          echo "Error count during canary: $ERROR_RATE"
+          if [ "$ERROR_RATE" != "None" ] && [ "$ERROR_RATE" -gt "10" ]; then
+            echo "CANARY FAILED — rolling back"
+            aws ecs update-service --cluster summit-store --service payment-service \
+              --task-definition payment-service:$(( $(aws ecs describe-services --cluster summit-store --services payment-service --query 'services[0].taskDefinition' --output text | grep -o '[0-9]*$') - 1 ))
+            exit 1
+          fi
+      - name: Promote to full deployment
+        run: |
+          echo "Canary healthy — promoting to 100% traffic"
+          aws ecs wait services-stable --cluster summit-store --services payment-service
