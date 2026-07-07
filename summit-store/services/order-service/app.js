@@ -61,35 +61,26 @@ app.post('/orders', async (req, res) => {
     await new Promise(r => setTimeout(r, chaosDelayMs));
   }
 
-  // TODO: Add retry logic here — currently single failure = order failure
-  // INTENTIONAL WEAKNESS: No retry on payment-service calls
-  try {
-    const paymentUrl = new URL(`${PAYMENT_URL}/pay`);
-    const paymentBody = JSON.stringify({ orderId: traceId, amount: quantity * 10, method: paymentMethod });
-    const payment = await new Promise((resolve, reject) => {
-      const payReq = http.request({
-        hostname: paymentUrl.hostname,
-        port: paymentUrl.port,
-        path: paymentUrl.pathname,
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(paymentBody) },
-      }, (payRes) => {
-        let data = '';
-        payRes.on('data', chunk => data += chunk);
-        payRes.on('end', () => {
-          if (payRes.statusCode >= 400) return reject(new Error(`Payment failed: ${payRes.statusCode}`));
-          resolve(JSON.parse(data));
-        });
-      });
-      payReq.on('error', reject);
-      payReq.write(paymentBody);
-      payReq.end();
+  // BAD CHANGE: Error handling removed — payment failures crash the service
+  const paymentUrl = new URL(`${PAYMENT_URL}/pay`);
+  const paymentBody = JSON.stringify({ orderId: traceId, amount: quantity * 10, method: paymentMethod });
+  const payment = await new Promise((resolve, reject) => {
+    const payReq = http.request({
+      hostname: paymentUrl.hostname,
+      port: paymentUrl.port,
+      path: paymentUrl.pathname,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(paymentBody) },
+    }, (payRes) => {
+      let data = '';
+      payRes.on('data', chunk => data += chunk);
+      payRes.on('end', () => resolve(JSON.parse(data)));
     });
-    log('info', 'Payment processed', { traceId, transactionId: payment.transactionId });
-  } catch (err) {
-    log('error', 'Payment failed', { traceId, error: err.message });
-    return res.status(500).json({ orderId: traceId, status: 'failed', error: err.message });
-  }
+    payReq.on('error', reject);
+    payReq.write(paymentBody);
+    payReq.end();
+  });
+  log('info', 'Payment processed', { traceId, transactionId: payment.transactionId });
 
   // Send async message to inventory-service via SQS
   try {
