@@ -83,8 +83,24 @@ export class MonitoringStack extends cdk.Stack {
     });
     throttleAlarm.addAlarmAction(new cwActions.SnsAction(alarmTopic));
 
-    // INTENTIONAL WEAKNESS: No alarm on SQS DLQ depth
-    // TODO: Add alarm on DLQ ApproximateNumberOfMessagesVisible > 0
-    // DevOps Agent Prevention should recommend this
+    // ALARM 4: SQS Dead-Letter Queue depth
+    // Fires when failed messages accumulate — indicates inventory reservation failures
+    const dlqAlarm = new cloudwatch.Alarm(this, 'DlqDepth', {
+      alarmName: 'sqs-dlq-messages-visible',
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/SQS',
+        metricName: 'ApproximateNumberOfMessagesVisible',
+        dimensionsMap: {
+          QueueName: 'summit-store-orders-dlq',
+        },
+        statistic: 'Maximum',
+        period: cdk.Duration.seconds(60),
+      }),
+      threshold: 0,
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+    dlqAlarm.addAlarmAction(new cwActions.SnsAction(alarmTopic));
   }
 }
