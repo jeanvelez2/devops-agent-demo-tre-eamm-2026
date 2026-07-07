@@ -41,14 +41,13 @@ export class ServicesStack extends cdk.Stack {
 
     const listener = this.alb.addListener('HTTP', { port: 80 });
 
-    // INTENTIONAL WEAKNESS: overly broad IAM role
-    // TODO: Scope to specific bucket and actions — DevOps Agent should recommend this
+    // Scoped IAM: order-service only needs PutObject on order-receipts bucket
     const orderRole = new iam.Role(this, 'OrderServiceRole', {
       assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
     });
     orderRole.addToPolicy(new iam.PolicyStatement({
-      actions: ['s3:*'],
-      resources: ['*'],
+      actions: ['s3:PutObject'],
+      resources: [`arn:aws:s3:::summit-store-receipts-${this.account}/*`],
     }));
     orderRole.addToPolicy(new iam.PolicyStatement({
       actions: ['sqs:SendMessage'],
